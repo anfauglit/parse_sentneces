@@ -1,15 +1,46 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
+import itertools
 
 class Node:
 	def __init__(self, label=''):
-		self.data=str(label)
+		self.data = str(label)
 		self.lchild = None
 		self.rchild = None
+		self.subformula = ''
 	def __str__(self):
 		return f'{self.data}'
 	
+class Tree:
+	def __init__(self, sent):
+		self.fomula = sent
+		self.tree = parse_classic(sent)
+		self.node_number = count_nodes(self.tree, 0)
+
+	def get_tree_edges(self, tree, tree_list):
+		if  tree.lchild != None:
+			tree_list.append((tree.data, tree.lchild.data))
+			self.get_tree_edges(tree.lchild, tree_list)
+		if  tree.rchild != None:
+			tree_list.append((tree.data, tree.rchild.data))
+			self.get_tree_edges(tree.rchild, tree_list)
+		
+	def get_tree_nodes(self, tree, tree_nodes):
+		tree_nodes.append(tree.data)
+		if  tree.lchild != None:
+			self.get_tree_nodes(tree.lchild, tree_nodes)
+		if  tree.rchild != None:
+			self.get_tree_nodes(tree.rchild, tree_nodes)
+
+	def get_subformula(self, sent):
+		if  sent.lchild != None:
+			yield from self.get_subformula(sent.lchild)	
+		if  sent.rchild != None:
+			yield from self.get_subformula(sent.rchild)	
+				
+		yield sent.subformula
+
 def count_nodes(tree, count):
 	count = count + 1
 	if  tree.lchild == None:
@@ -22,13 +53,6 @@ def count_nodes(tree, count):
 		count = count_nodes(tree.rchild, count)
 	return count
 
-def get_subformula(sent):
-	if  sent.lchild != None:
-		yield from get_subformula(sent.lchild)	
-	if  sent.rchild != None:
-		yield from get_subformula(sent.rchild)	
-			
-	yield sent.data
 
 def outer_conn_index(mystring):
 	counter = 0
@@ -66,6 +90,7 @@ def parse_classic(sent):
 	conn_index = outer_conn_index(sent)
 	if conn_index > 0:
 		node.data = sent[conn_index]
+		node.subformula = sent
 		if conn_index == 1:
 			node.lchild = parse_classic(sent[conn_index + 1:-1])
 		else:
@@ -73,40 +98,76 @@ def parse_classic(sent):
 			node.rchild = parse_classic(sent[conn_index + 1:-1])
 	else:
 		node.data = sent
+		node.subformula = sent
 
 	return node
-	
-def tree_to_list(tree, tree_list):
-	if  tree.lchild != None:
-		tree_list.append((tree.data, tree.lchild.data))
-		tree_to_list(tree.lchild, tree_list)
-	if  tree.rchild != None:
-		tree_list.append((tree.data, tree.rchild.data))
-		tree_to_list(tree.rchild, tree_list)
-	
-def get_tree_nodes(tree, tree_nodes):
-	tree_nodes.append(tree.data)
-	if  tree.lchild != None:
-		get_tree_nodes(tree.lchild, tree_nodes)
-	if  tree.rchild != None:
-		get_tree_nodes(tree.rchild, tree_nodes)
 
-test_sents = ['(p*q)', '(-(p+q))', '((-p)+(p*q))']
-root = parse_classic(test_sents[2])
+def calc_truth_val(tree, assignment):
+	if tree.data == '*':
+		return calc_truth_val(tree.lchild, assignment) and \
+		calc_truth_val(tree.rchild, assignment)
+	elif tree.data == '+':
+		return calc_truth_val(tree.lchild, assignment) or \
+		calc_truth_val(tree.rchild, assignment)
+	elif tree.data == '-':
+		return not calc_truth_val(tree.lchild, assignment)
+		
+	return assignment[tree.data]
 
-for node in list(get_subformula(root)):
-	print(node)
+def calc_truth_val_dict(tree, assignment, out_dict):
+	if tree.data == '*':
+		l_value = calc_truth_val_dict(tree.lchild, assignment, out_dict)
+		r_value = calc_truth_val_dict(tree.rchild, assignment, out_dict)
+		out_dict[tree.subformula] = l_value and r_value 
+		return l_value and r_value
+	elif tree.data == '+':
+		l_value = calc_truth_val_dict(tree.lchild, assignment, out_dict)
+		r_value = calc_truth_val_dict(tree.rchild, assignment, out_dict)
+		out_dict[tree.subformula] = l_value or r_value 
+		return l_value or r_value
+	elif tree.data == '-':
+		t_value = not calc_truth_val_dict(tree.lchild, assignment, out_dict)
+		out_dict[tree.subformula] = t_value
+		return t_value
+		
+	t_value = assignment[tree.data]
+	out_dict[tree.subformula] = t_value
+	return assignment[tree.data]
+
+if __name__ == "__main__":
+	test_sents = ['(p*q)', '(-(p+q))', '((-p)+(p*q))']
+	ass = [dict(zip('pq', a)) for a in list(itertools.product([True, False], repeat=2))]
+	root = parse_classic(test_sents[0])
+		
+	tree_edges= []
+	tree_nodes = []
 	
-tree_list = []
-tree_to_list(root, tree_list)
-print(tree_list)
-tree_nodes = []
-get_tree_nodes(root, tree_nodes)
-print(tree_nodes)
+	#ass = [dict(zip(comps, a)) for a in list(itertools.product([True, False], repeat=2))]
+	t = Tree(test_sents[2])
+	t.get_tree_nodes(t.tree, tree_nodes)
+	t.get_tree_edges(t.tree, tree_edges)
+	
+	subs = sorted(list(set(t.get_subformula(t.tree))), key=len)
+	for sub in subs:
+		print(f'{sub:^10}', end='')
+	print('\n')
+	r = []
+	mydict = {}
+	for a in ass:
+		mydict.clear()
+		calc_truth_val_dict(t.tree, a, mydict)
+		r.append(mydict.copy())
 
-G = nx.Graph()
-G.add_nodes_from(tree_nodes)
-G.add_edges_from(tree_list)
-pos = graphviz_layout(G, prog='dot')
-nx.draw(G, pos, with_labels=True)
-plt.show()
+	for res in r:
+		for key in subs: 
+			print(f'{str(res[key]):^10}', end='')
+		print('\n')
+
+"""
+	G = nx.Graph()
+	G.add_nodes_from(tree_nodes)
+	G.add_edges_from(tree_list)
+	pos = graphviz_layout(G, prog='dot')
+	nx.draw(G, pos, with_labels=True)
+	plt.show()
+"""
