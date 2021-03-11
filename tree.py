@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 import itertools
+import json
+import numpy as np
 
 class Node:
 	def __init__(self, label=''):
@@ -142,7 +144,6 @@ if __name__ == "__main__":
 	tree_edges= []
 	tree_nodes = []
 	
-	#ass = [dict(zip(comps, a)) for a in list(itertools.product([True, False], repeat=2))]
 	t = Tree(test_sents[2])
 	t.get_tree_nodes(t.tree, tree_nodes)
 	t.get_tree_edges(t.tree, tree_edges)
@@ -163,6 +164,13 @@ if __name__ == "__main__":
 			print(f'{str(res[key]):^10}', end='')
 		print('\n')
 
+	row_values = np.array([res[key] for res in r for key in subs])
+	a =	np.reshape(row_values, (len(r), len(subs)))
+
+	truth_table = {}
+	truth_table['header'] = subs
+	truth_table['body'] = a.tolist()
+	json_tt = json.dumps(truth_table)
 """
 	G = nx.Graph()
 	G.add_nodes_from(tree_nodes)
