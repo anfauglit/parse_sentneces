@@ -1,10 +1,6 @@
-import matplotlib.pyplot as plt
-import networkx as nx
-from networkx.drawing.nx_agraph import graphviz_layout
 import itertools
 import json
 import numpy as np
-
 class Node:
 	def __init__(self, label=''):
 		self.data = str(label)
@@ -136,6 +132,32 @@ def calc_truth_val_dict(tree, assignment, out_dict):
 	out_dict[tree.subformula] = t_value
 	return assignment[tree.data]
 
+def get_json_table(sent):
+	t = Tree(sent)
+	tree_nodes = []
+	t.get_tree_nodes(t.tree, tree_nodes)
+	props = list(set([p for p in tree_nodes if \
+	p.isalpha()]))
+	ass = [dict(zip(props, a)) for a in list(itertools.product([True, False], \
+	repeat=len(props)))]
+	subs = sorted(list(set(t.get_subformula(t.tree))), key=len)
+	r = []
+	mydict = {}
+	for a in ass:
+		mydict.clear()
+		calc_truth_val_dict(t.tree, a, mydict)
+		r.append(mydict.copy())
+
+	row_values = np.array([res[key] for res in r for key in subs])
+	a =	np.reshape(row_values, (len(r), len(subs)))
+
+	truth_table = {}
+	truth_table['header'] = subs
+	truth_table['body'] = a.tolist()
+	json_tt = json.dumps(truth_table)
+	
+	return json_tt
+
 if __name__ == "__main__":
 	test_sents = ['(p*q)', '(-(p+q))', '((-p)+(p*q))']
 	ass = [dict(zip('pq', a)) for a in list(itertools.product([True, False], repeat=2))]
@@ -171,6 +193,7 @@ if __name__ == "__main__":
 	truth_table['header'] = subs
 	truth_table['body'] = a.tolist()
 	json_tt = json.dumps(truth_table)
+	print(get_json_table(test_sents[2]))
 """
 	G = nx.Graph()
 	G.add_nodes_from(tree_nodes)
